@@ -37,7 +37,7 @@ async function run() {
     const registered_users = db.collection('Users') 
     const cartCollection = db.collection('Carts')
     const productsReviewCollection = db.collection('Reviews')
-
+    const ordersCollection = db.collection('Orders')
     app.get('/products',async(req,res)=>{
       const query = req.query;
       const filter = { 
@@ -216,7 +216,42 @@ res.send(result)
       metadata:
         {
           customer:JSON.stringify(products.map(cart=>cart.email)),
-          cartsId:JSON.stringify(products.map(cart=> cart._id))
+          cartIds:JSON.stringify(products.map(cart=> cart._id)),
+          orders:JSON.stringify( products.map(product=>{
+            return   {
+              product_name:product.name,
+              image:product.image,
+              price:product.price,
+              quantity:product.quantity,
+              orderInformation:{
+                  date:{
+                      day: new Date().getDate(),
+                      month: new Date().getMonth(),
+                      year: new Date().getFullYear(),
+                      time:{
+                        hour: new Date().getHours(),
+                        minutes: new Date().getMinutes(),
+                        seconds: new Date().getSeconds()
+                      }
+                  },
+                  status:'Processing',
+                  delivery:{
+                      date:{
+                          from:{
+                            day: new Date().getDate(),
+                            month: new Date().getMonth(),
+                            year: new Date().getFullYear(),
+                          },
+                          to:{
+                              day:null,
+                              month:null,
+                              year: null,
+                          }
+                      }
+                  }
+              }
+          }
+          })),  
         }
       ,
       success_url:'http://localhost:5173/ego/my-cart',
@@ -244,21 +279,25 @@ app.post('/webhook',bodyParser.raw({type: 'application/json'}),async(req, res) =
           console.log(`Webhook Error: ${err.message}`)
           return res.status(400).send(`Webhook Error: ${err.message}`);
    }
-   console.log(event.data.object.metadata.customer)
-   app.get()
-  //  console.log(JSON.parse(event.data.object.metadata))
+   
 
-  // Handle the event
-  // switch (event.type) {
-  //   case 'payment_intent.succeeded':
-  //     const paymentIntentSucceeded = event.data.object;
-  //     console.log(paymentIntentSucceeded)
-  //     // Then define and call a function to handle the event payment_intent.succeeded
-  //     break;
-  //   // ... handle other event types
-  //   default:
-  //     console.log(`Unhandled event type ${event.type}`);
-  // }
+  switch (event.type) {
+    case 'checkout.session.completed':
+      const checkoutSession = event.data.object.metadata;
+     
+    console.log(checkoutSession.metadata.orders)
+      const filter = {
+        _id:{
+          $in:JSON.parse(checkoutSession.cartIds).map(id=> new ObjectId(id))
+        }
+      }
+      const result = await cartCollection.deleteMany(filter)
+
+      break;
+    
+    default:
+      console.log(`Unhandled event type ${event.type}`);
+  }
   // if(eventType === 'checkout.session.completed'){
   // stripe.customers.retrieve(data.metadata).then((metaData)=>{
   //   console.log(custom_fields)
